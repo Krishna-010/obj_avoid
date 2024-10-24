@@ -1,34 +1,59 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Twist
 
 class ObjectAvoidance(Node):
     def __init__(self):
         super().__init__('object_avoidance')
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 1)
-        self.laser_sub = self.create_subscription(LaserScan, '/scan', self.laser_callback, 1)
-        self.get_logger().info('Object avoidance node initialized.')
 
-    def laser_callback(self, data):
-        # Check for obstacles in front of JARVIS
-        front_distance = min(data.ranges[0:30] + data.ranges[-30:])  # Get minimum distance in front
-        if front_distance < 0.5:  # Threshold for obstacle detection
-            self.avoid_obstacle()
+        # Updated QoS profile to match /scan publisher
+        qos_profile = rclpy.qos.QoSProfile(
+            reliability=rclpy.qos.QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+            history=rclpy.qos.QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+            depth=10,
+            durability=rclpy.qos.QoSDurabilityPolicy.VOLATILE,
+            liveliness=rclpy.qos.QoSLivelinessPolicy.AUTOMATIC
+        )
 
-    def avoid_obstacle(self):
-        self.get_logger().info('Obstacle detected! Avoiding...')
-        cmd_vel = Twist()
-        cmd_vel.linear.x = 0.0
-        cmd_vel.angular.z = 2.4  # Turn right to avoid the obstacle
-        self.cmd_vel_pub.publish(cmd_vel)
-        self.get_logger().info(f'Published avoidance cmd_vel: linear={cmd_vel.linear.x}, angular={cmd_vel.angular.z}')
+        # Subscribe to /scan with updated QoS
+        self.scan_subscriber = self.create_subscription(
+            LaserScan,
+            '/scan',
+            self.scan_callback,
+            qos_profile
+        )
+
+        # Publisher for controlling the robot's velocity
+        self.cmd_vel_publisher = self.create_publisher(
+            Twist,
+            '/cmd_vel',
+            10
+        )
+        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.obstacle_detected = False
+
+    def scan_callback(self, msg):
+        # Process laser scan data for object avoidance
+        self.get_logger().info('Processing /scan data for obstacle avoidance')
+        # Object avoidance logic here (keeping tangential path)
+
+    def timer_callback(self):
+        twist_msg = Twist()
+        if self.obstacle_detected:
+            # Adjust for obstacle
+            self.get_logger().info('Obstacle detected, adjusting path...')
+            # Set twist_msg for tangential path
+        else:
+            self.get_logger().info('No obstacle, continuing to goal...')
+            # Set normal twist_msg to move toward the goal
+
+        self.cmd_vel_publisher.publish(twist_msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    object_avoidance_node = ObjectAvoidance()
-    rclpy.spin(object_avoidance_node)
-    object_avoidance_node.destroy_node()
+    node = ObjectAvoidance()
+    rclpy.spin(node)
     rclpy.shutdown()
 
 if __name__ == '__main__':
