@@ -7,7 +7,6 @@ class ObjectAvoidance(Node):
     def __init__(self):
         super().__init__('object_avoidance')
 
-        # Updated QoS profile to match /scan publisher
         qos_profile = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
             history=rclpy.qos.QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
@@ -28,7 +27,7 @@ class ObjectAvoidance(Node):
         self.cmd_vel_publisher = self.create_publisher(
             Twist,
             '/cmd_vel',
-            10
+            qos_profile
         )
         self.timer = self.create_timer(0.1, self.timer_callback)
         self.obstacle_detected = False
@@ -48,6 +47,8 @@ class ObjectAvoidance(Node):
             self.get_logger().info('No obstacle, continuing to goal...')
             # Set normal twist_msg to move toward the goal
 
+        twist_msg.linear.x = min(twist_msg.linear.x, 0.18)  # Linear speed constraint
+        twist_msg.angular.z = min(twist_msg.angular.z, 2.4)  # Angular speed constraint
         self.cmd_vel_publisher.publish(twist_msg)
 
 def main(args=None):
