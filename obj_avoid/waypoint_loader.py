@@ -4,18 +4,30 @@ from geometry_msgs.msg import Point
 
 class WaypointLoader(Node):
     def __init__(self):
-        super().__init__('waypoint_loader')
-        self.waypoints = [(1.5, 0), (1.5, 1.4), (0, 1.4)]  # Predefined waypoints
-        self.get_logger().info(f'Waypoints loaded: {self.waypoints}')
+        # Predefined waypoints
+        self.waypoints = [
+            Point(x=1.5, y=0.0, z=0.0),
+            Point(x=1.5, y=1.4, z=0.0),
+            Point(x=0.0, y=1.4, z=0.0),
+            # Add more waypoints as needed
+        ]
+        self.current_index = 0
 
-    def get_waypoints(self):
-        return self.waypoints
+        self.timer = self.create_timer(1.0, self.publish_waypoint)
+
+    def publish_waypoint(self):
+        if self.current_index < len(self.waypoints):
+            self.waypoint_pub.publish(self.waypoints[self.current_index])
+            self.get_logger().info(f'Published waypoint: {self.waypoints[self.current_index]}')
+            self.current_index += 1
+        else:
+            self.current_index = 0  # Reset to first waypoint
 
 def main(args=None):
     rclpy.init(args=args)
-    waypoint_loader_node = WaypointLoader()
-    rclpy.spin(waypoint_loader_node)
-    waypoint_loader_node.destroy_node()
+    waypoint_loader = WaypointLoader()
+    rclpy.spin(waypoint_loader)
+    waypoint_loader.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
