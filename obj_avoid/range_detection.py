@@ -1,12 +1,13 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 class RangeDetectionNode(Node):
     def __init__(self):
         super().__init__('range_detection_node')
-        self.subscription = self.create_subscription(
-            LaserScan, '/scan', self.scan_callback, 10)
+        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
+        self.scan_subscriber = self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile)
         self.obstacle_detected = False
         self.get_logger().info("Range detection node initialized.")
 
