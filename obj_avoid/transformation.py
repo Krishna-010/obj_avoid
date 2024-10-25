@@ -2,9 +2,8 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 import tf2_ros
-import tf2_geometry_msgs
 from geometry_msgs.msg import TransformStamped
-from tf_transformations import euler_from_quaternion
+from math import atan2, degrees
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
 class TFNode(Node):
@@ -27,22 +26,28 @@ class TFNode(Node):
         self.publisher = self.create_publisher(float, '/yaw', 10)
         self.get_logger().info("TF Node initialized and waiting for odometry data...")
 
-        # Set up TF2 buffer and listener
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
     def odom_callback(self, odom_msg):
         """Callback to handle incoming odometry data and convert quaternion to yaw."""
         orientation_q = odom_msg.pose.pose.orientation
-        quaternion = (orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
-        
-        # Convert quaternion to yaw using tf2
-        euler = euler_from_quaternion(quaternion)
-        yaw = euler[2]  # Yaw is the third element in the euler angles
+        yaw = self.quaternion_to_yaw(orientation_q)
 
         # Publish the yaw value
         self.publisher.publish(yaw)
         self.get_logger().info(f"Published Yaw: {yaw}")
+
+    def quaternion_to_yaw(self, orientation_q):
+        """Convert quaternion to yaw angle."""
+        x = orientation_q.x
+        y = orientation_q.y
+        z = orientation_q.z
+        w = orientation_q.w
+
+        # Calculate yaw (z-axis rotation)
+        sin_yaw = 2.0 * (w * z + x * y)
+        cos_yaw = 1.0 - 2.0 * (y * y + z * z)
+        yaw = atan2(sin_yaw, cos_yaw)
+        
+        return yaw
 
 def main(args=None):
     rclpy.init(args=args)
