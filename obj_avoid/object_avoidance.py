@@ -5,11 +5,13 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from math import atan2
 import numpy as np
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 class RRTObstacleAvoidance(Node):
     def __init__(self):
         super().__init__('rrt_obstacle_avoidance_node')
-        self.scan_subscriber = self.create_subscription(LaserScan, '/scan', self.scan_callback, 10)
+        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
+        self.scan_subscriber = self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile)
         self.position_subscriber = self.create_subscription(Odometry, '/odom', self.position_callback, 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
         self.obstacle_detected = False
