@@ -1,46 +1,84 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Point
 from std_msgs.msg import Float64
-import math
+import time
+from math import atan2, sqrt
 
 class GoToGoalNode(Node):
     def __init__(self):
         super().__init__('go_to_goal')
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.yaw_sub = self.create_subscription(Float64, '/yaw', self.yaw_callback, 10)
-
-        # Waypoints initialization
-        self.waypoints = [(1.5, 0), (1.5, 1.4), (1.4, 0)]
-        self.current_waypoint_index = 0
-        self.velocity_constraints = {'linear': 0.18, 'angular': 2.4}
+        
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.create_subscription(Float64, '/yaw', self.yaw_callback, 10)
+        
+        # Initialize waypoints
+        self.waypoints = [(1.5, 0.0), (1.5, 1.4), (0.0, 1.4)]
+        self.current_goal_index = 0
+        
+        # Movement parameters
+        self.linear_velocity = 0.18  # m/s
+        self.angular_velocity = 2.4   # rad/s
         self.current_yaw = 0.0
-        self.odom_position = (0.0, 0.0)
 
-        self.get_logger().info("Go To Goal Node initialized, moving to waypoints...")
+        self.get_logger().info("Go To Goal Node initialized and starting to move to waypoints...")
 
-    def yaw_callback(self, msg):
-        self.current_yaw = msg.data
-        self.move_to_next_waypoint()
+        self.move_to_goal()
 
-    def move_to_next_waypoint(self):
-        if self.current_waypoint_index < len(self.waypoints):
-            target = self.waypoints[self.current_waypoint_index]
-            distance = math.sqrt((target[0] - self.odom_position[0]) ** 2 + (target[1] - self.odom_position[1]) ** 2)
-            
-            if distance < 0.1:  # Considered reached if within 10cm
-                self.current_waypoint_index += 1
-                self.get_logger().info(f"Reached waypoint {self.current_waypoint_index}")
-            else:
-                vel_msg = Twist()
-                vel_msg.linear.x = min(self.velocity_constraints['linear'], distance)
-                vel_msg.angular.z = self.calculate_yaw_correction(target)
-                self.cmd_pub.publish(vel_msg)
+    def yaw_callback(self, yaw_msg):
+        """Update the current yaw from the TF node."""
+        self.current_yaw = yaw_msg.data
 
-    def calculate_yaw_correction(self, target):
-        target_yaw = math.atan2(target[1] - self.odom_position[1], target[0] - self.odom_position[0])
-        yaw_error = target_yaw - self.current_yaw
-        return min(self.velocity_constraints['angular'], yaw_error)
+    def move_to_goal(self):
+        """Main logic to move to the next waypoint."""
+        for waypoint in self.waypoints:
+            self.move_straight(waypoint[0], waypoint[1])
+            self.turn_left()
+
+    def move_straight(self, goal_x, goal_y):
+        """Move straight to the given goal coordinates."""
+        current_x, current_y = 0.0, 0.0  # Replace with actual odometry data
+
+        while True:
+            # Calculate the distance to the goal
+            distance = sqrt((goal_x - current_x) ** 2 + (goal_y - current_y) ** 2)
+
+            if distance < 0.1:  # If close enough to the waypoint
+                self.stop()
+                self.get_logger().info(f"Reached waypoint: ({goal_x}, {goal_y})")
+                time.sleep(2)  # Wait at the waypoint
+                break
+
+            # Create a twist message for forward movement
+            twist = Twist()
+            twist.linear.x = self.linear_velocity
+            twist.angular.z = 0.0  # No rotation while moving straight
+            self.publisher.publish(twist)
+
+    def turn_left(self):
+        """Turn left 90 degrees."""
+        target_yaw = self.current_yaw + 1.5708  # 90 degrees in radians
+
+        while True:
+            # Create a twist message for turning
+            twist = Twist()
+            twist.linear.x = 0.0  # No forward movement
+            twist.angular.z = self.angular_velocity  # Rotate counter-clockwise
+            self.publisher.publish(twist)
+
+            # Check if the desired yaw is reached
+            if abs(self.current_yaw - target_yaw) < 0.1:
+                self.stop()
+                self.get_logger().info("Turned left 90 degrees")
+                time.sleep(1)  # Wait after turning
+                break
+
+    def stop(self):
+        """Stop the robot."""
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.angular.z = 0.0
+        self.publisher.publish(twist)
 
 def main(args=None):
     rclpy.init(args=args)
