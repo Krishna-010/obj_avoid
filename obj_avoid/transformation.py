@@ -1,9 +1,8 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-import tf2_ros
-from geometry_msgs.msg import TransformStamped
-from math import atan2, degrees
+from std_msgs.msg import Float64  # Import Float64 for yaw publishing
+from math import atan2
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
 class TFNode(Node):
@@ -23,7 +22,8 @@ class TFNode(Node):
             qos_profile
         )
         
-        self.publisher = self.create_publisher(float, '/yaw', 10)
+        # Use Float64 message type for yaw
+        self.publisher = self.create_publisher(Float64, '/yaw', 10)
         self.get_logger().info("TF Node initialized and waiting for odometry data...")
 
     def odom_callback(self, odom_msg):
@@ -32,7 +32,9 @@ class TFNode(Node):
         yaw = self.quaternion_to_yaw(orientation_q)
 
         # Publish the yaw value
-        self.publisher.publish(yaw)
+        yaw_msg = Float64()
+        yaw_msg.data = yaw
+        self.publisher.publish(yaw_msg)
         self.get_logger().info(f"Published Yaw: {yaw}")
 
     def quaternion_to_yaw(self, orientation_q):
