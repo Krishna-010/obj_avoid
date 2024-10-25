@@ -2,7 +2,8 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Quaternion
 from std_msgs.msg import Float64
-import tf_transformations
+import tf2_ros
+import tf2_geometry_msgs
 
 class TFNode(Node):
     def __init__(self):
@@ -24,7 +25,9 @@ class TFNode(Node):
             quaternion_msg.z,
             quaternion_msg.w
         )
-        euler = tf_transformations.euler_from_quaternion(quaternion)
+        
+        # Use tf2 to convert quaternion to Euler angles
+        euler = tf2_geometry_msgs.transformations.euler_from_quaternion(quaternion)
         yaw = euler[2]  # Get the yaw value
         yaw_msg = Float64()
         yaw_msg.data = yaw
