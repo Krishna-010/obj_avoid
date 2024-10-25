@@ -1,38 +1,38 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Quaternion
-from std_msgs.msg import Float64
-import tf2_ros
-import tf2_geometry_msgs
+from nav_msgs.msg import Odometry
+from tf_transformations import euler_from_quaternion
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
 class TFNode(Node):
     def __init__(self):
         super().__init__('tf')
-        self.subscriber = self.create_subscription(
-            Quaternion,
-            '/quaternion',  # Adjust the topic name as needed
-            self.quaternion_callback,
-            10
-        )
-        self.publisher = self.create_publisher(Float64, '/yaw', 10)
-        self.get_logger().info("TF Node initialized and waiting for quaternion data...")
-
-    def quaternion_callback(self, quaternion_msg):
-        """Convert quaternion to yaw and publish it."""
-        quaternion = (
-            quaternion_msg.x,
-            quaternion_msg.y,
-            quaternion_msg.z,
-            quaternion_msg.w
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=rclpy.qos.QoSHistoryPolicy.KEEP_LAST,
+            depth=10
         )
         
-        # Use tf2 to convert quaternion to Euler angles
-        euler = tf2_geometry_msgs.transformations.euler_from_quaternion(quaternion)
-        yaw = euler[2]  # Get the yaw value
-        yaw_msg = Float64()
-        yaw_msg.data = yaw
-        self.publisher.publish(yaw_msg)
-        self.get_logger().info(f"Published yaw: {yaw}")
+        self.subscriber = self.create_subscription(
+            Odometry,
+            '/odom',
+            self.odom_callback,
+            qos_profile
+        )
+        
+        self.publisher = self.create_publisher(float, '/yaw', 10)
+        self.get_logger().info("TF Node initialized and waiting for odometry data...")
+
+    def odom_callback(self, odom_msg):
+        """Callback to handle incoming odometry data and convert quaternion to yaw."""
+        orientation_q = odom_msg.pose.pose.orientation
+        quaternion = (orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
+        euler = euler_from_quaternion(quaternion)
+        yaw = euler[2]  # Yaw is the third element in the euler angles
+        
+        self.publisher.publish(yaw)
+        self.get_logger().info(f"Published Yaw: {yaw}")
 
 def main(args=None):
     rclpy.init(args=args)
