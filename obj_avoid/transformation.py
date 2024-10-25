@@ -1,28 +1,41 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Point, PoseStamped
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Quaternion
+from std_msgs.msg import Float64
+import tf_transformations
 
-class TransformationNode(Node):
+class TFNode(Node):
     def __init__(self):
-        super().__init__('transformation_node')
-        self.subscription = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.publisher_ = self.create_publisher(Point, '/global_position', 10)
-        self.get_logger().info("Transformation node initialized.")
+        super().__init__('tf')
+        self.subscriber = self.create_subscription(
+            Quaternion,
+            '/quaternion',  # Adjust the topic name as needed
+            self.quaternion_callback,
+            10
+        )
+        self.publisher = self.create_publisher(Float64, '/yaw', 10)
+        self.get_logger().info("TF Node initialized and waiting for quaternion data...")
 
-    def odom_callback(self, msg):
-        global_position = Point()
-        global_position.x = msg.pose.pose.position.x
-        global_position.y = msg.pose.pose.position.y
-        global_position.z = 0.0
-        self.publisher_.publish(global_position)
-        self.get_logger().info(f"Published global position: {global_position}")
+    def quaternion_callback(self, quaternion_msg):
+        """Convert quaternion to yaw and publish it."""
+        quaternion = (
+            quaternion_msg.x,
+            quaternion_msg.y,
+            quaternion_msg.z,
+            quaternion_msg.w
+        )
+        euler = tf_transformations.euler_from_quaternion(quaternion)
+        yaw = euler[2]  # Get the yaw value
+        yaw_msg = Float64()
+        yaw_msg.data = yaw
+        self.publisher.publish(yaw_msg)
+        self.get_logger().info(f"Published yaw: {yaw}")
 
 def main(args=None):
     rclpy.init(args=args)
-    transformation_node = TransformationNode()
-    rclpy.spin(transformation_node)
-    transformation_node.destroy_node()
+    tf_node = TFNode()
+    rclpy.spin(tf_node)
+    tf_node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
