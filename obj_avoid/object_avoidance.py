@@ -9,7 +9,7 @@ import random
 from sensor_msgs.msg import LaserScan
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
-class ObstacleAvoidance:
+class ObstacleAvoidance(Node):
     def __init__(self):
         super().__init__('obstacle_avoidance')
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
