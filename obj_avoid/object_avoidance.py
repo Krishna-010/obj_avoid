@@ -12,15 +12,15 @@ from sensor_msgs.msg import LaserScan
 class ObstacleAvoidance:
     def __init__(self):
         rospy.init_node('obstacle_avoidance', anonymous=True)
-        
+        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
         # Publishers and Subscribers
         self.path_pub = rospy.Publisher('/planned_path', PoseArray, queue_size=10)
         self.obstacle_pub = rospy.Publisher('/obstacle_detected', Bool, queue_size=10)
-        self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10
+        self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
         # Subscribe to sensor data here for obstacles
         self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
-        self.laser_subscriber = rospy.Subscriber("/scan", LaserScan, self.laser_callback)
+        self.laser_subscriber = rospy.Subscriber("/scan", LaserScan, self.laser_callback,qos_profile)
 
     def laser_callback(self, msg):
         # Process laser data to update obstacle list
