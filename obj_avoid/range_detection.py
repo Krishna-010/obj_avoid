@@ -1,26 +1,26 @@
-import rclpy
-from rclpy.node import Node
+#!/usr/bin/env python3
+
+import rospy
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
-class RangeDetectionNode(Node):
+class RangeDetection:
     def __init__(self):
-        super().__init__('range_detection_node')
+        rospy.init_node('range_detection', anonymous=True)
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
-        self.scan_subscriber = self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile)
-        self.obstacle_detected = False
-        self.get_logger().info("Range detection node initialized.")
+        # Publishers and Subscribers
+        self.obstacle_pub = rospy.Publisher('/obstacle_detected', Bool, queue_size=10)
+        self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.scan_callback,qos_profile)
 
     def scan_callback(self, msg):
-        self.obstacle_detected = any(distance < 0.5 for distance in msg.ranges if distance > 0)
-        self.get_logger().info(f"Obstacle detected: {self.obstacle_detected}")
+        # Check if there are obstacles close to the robot
+        obstacle_detected = any(distance < 0.5 for distance in msg.ranges)
+        self.obstacle_pub.publish(obstacle_detected)
 
-def main(args=None):
-    rclpy.init(args=args)
-    range_detection_node = RangeDetectionNode()
-    rclpy.spin(range_detection_node)
-    range_detection_node.destroy_node()
-    rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    try:
+        node = RangeDetection()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
