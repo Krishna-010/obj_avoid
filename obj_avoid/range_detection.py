@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import rcply
-from rcply.node import Node
+import rclpy
+from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
