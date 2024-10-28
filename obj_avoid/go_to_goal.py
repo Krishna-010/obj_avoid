@@ -6,7 +6,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 
-class GoToGoal:
+class GoToGoal(Node):
     def __init__(self):
         super().__init__('go_to_goal')
         
