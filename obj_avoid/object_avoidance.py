@@ -1,46 +1,81 @@
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist, Point
-from sensor_msgs.msg import LaserScan
+#!/usr/bin/env python3
+
+import rospy
+from geometry_msgs.msg import PoseStamped, PoseArray
 from nav_msgs.msg import Odometry
-from math import atan2
+from std_msgs.msg import Bool
 import numpy as np
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+import random
+from geometry_msgs.msg import PoseStamped, Twist
+from sensor_msgs.msg import LaserScan
 
-class RRTObstacleAvoidance(Node):
+class ObstacleAvoidance:
     def __init__(self):
-        super().__init__('rrt_obstacle_avoidance_node')
-        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
-        self.scan_subscriber = self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile)
-        self.position_subscriber = self.create_subscription(Odometry, '/odom', self.position_callback, 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.obstacle_detected = False
-        self.goal_position = None
-        self.current_position = None
-        self.get_logger().info("RRT Obstacle Avoidance node initialized.")
+        rospy.init_node('obstacle_avoidance', anonymous=True)
+        
+        # Publishers and Subscribers
+        self.path_pub = rospy.Publisher('/planned_path', PoseArray, queue_size=10)
+        self.obstacle_pub = rospy.Publisher('/obstacle_detected', Bool, queue_size=10)
+        self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10
 
-    def scan_callback(self, msg):
-        self.obstacle_detected = any(distance < 0.5 for distance in msg.ranges if distance > 0)
+        # Subscribe to sensor data here for obstacles
+        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
+        self.laser_subscriber = rospy.Subscriber("/scan", LaserScan, self.laser_callback)
 
-    def position_callback(self, msg):
-        self.current_position = msg.pose.pose.position
-        if self.obstacle_detected and self.goal_position:
-            self.avoid_obstacle()
+    def laser_callback(self, msg):
+        # Process laser data to update obstacle list
+        self.obstacle_list = []
+        angle_min = msg.angle_min
+        angle_increment = msg.angle_increment
+        
+        for i, range in enumerate(msg.ranges):
+            if range < 1.0:  # Consider only close obstacles
+                angle = angle_min + i * angle_increment
+                obstacle_x = range * np.cos(angle)
+                obstacle_y = range * np.sin(angle)
+                self.obstacle_list.append((obstacle_x, obstacle_y, 0.1))  # 0.1 is radius estimate
 
-    def avoid_obstacle(self):
-        angle_to_avoid = atan2(self.goal_position.y - self.current_position.y, self.goal_position.x - self.current_position.x) + np.pi / 2
-        cmd_msg = Twist()
-        cmd_msg.linear.x = 0.1
-        cmd_msg.angular.z = angle_to_avoid
-        self.cmd_vel_publisher.publish(cmd_msg)
-        self.get_logger().info(f"Avoiding obstacle with linear.x: {cmd_msg.linear.x}, angular.z: {cmd_msg.angular.z}")
+    def move_along_path(self, path):
+        for point in path:
+            velocity_msg = Twist()
+            direction = np.array(point) - np.array(self.get_current_position())
+            distance = np.linalg.norm(direction)
+            
+            if distance < 0.1:  # Tolerance to stop at each waypoint
+                continue
+            
+            velocity_msg.linear.x = min(0.18, 0.18 * distance)  # Cap at linear speed
+            velocity_msg.angular.z = 2.4 * np.arctan2(direction[1], direction[0])  # Adjust angle
+            
+            self.velocity_publisher.publish(velocity_msg)
+            rospy.sleep(0.1)
 
-def main(args=None):
-    rclpy.init(args=args)
-    rrt_obstacle_avoidance_node = RRTObstacleAvoidance()
-    rclpy.spin(rrt_obstacle_avoidance_node)
-    rrt_obstacle_avoidance_node.destroy_node()
-    rclpy.shutdown()
+    def get_current_position(self):
+        # Placeholder: Replace with current position data from odometry or localization
+        return [0.0, 0.0]
 
-if __name__ == '__main__':
-    main()
+    def run(self):
+        rate = rospy.Rate(1)  # Hz
+        while not rospy.is_shutdown():
+            planner = RRTPlanner(start=self.get_current_position(), 
+                                 goal=self.goal_position, 
+                                 obstacle_list=self.obstacle_list, 
+                                 step_size=self.step_size, 
+                                 max_iter=self.max_iter)
+            
+            path = planner.plan()
+            
+            if path:
+                rospy.loginfo("Path found, moving along path.")
+                self.move_along_path(path)
+            else:
+                rospy.logwarn("Path not found. Re-planning...")
+            
+            rate.sleep()
+
+if __name__ == "__main__":
+    try:
+        obstacle_avoidance = ObstacleAvoidance()
+        obstacle_avoidance.run()
+    except rospy.ROSInterruptException:
+        pass
