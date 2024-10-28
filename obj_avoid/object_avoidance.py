@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import rcply
+import rclpy
 from geometry_msgs.msg import PoseStamped, PoseArray, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
@@ -47,7 +47,7 @@ class ObstacleAvoidance:
             velocity_msg.angular.z = 2.4 * np.arctan2(direction[1], direction[0])  # Adjust angle
             
             self.velocity_publisher.publish(velocity_msg)
-            self.get_clock().sleep_for(rcply.duration.Duration(seconds=0.1))
+            self.get_clock().sleep_for(rclpy.duration.Duration(seconds=0.1))
 
     def get_current_position(self):
         # Placeholder: Replace with current position data from odometry or localization
@@ -55,7 +55,7 @@ class ObstacleAvoidance:
 
     def run(self):
         rate = self.create_rate(1)  # Hz
-        while rcply.ok():
+        while rclpy.ok():
             planner = RRTPlanner(start=self.get_current_position(), 
                                  goal=self.goal_position, 
                                  obstacle_list=self.obstacle_list, 
