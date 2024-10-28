@@ -8,6 +8,7 @@ import numpy as np
 import random
 from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import LaserScan
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 class ObstacleAvoidance:
     def __init__(self):
