@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
-
-import rospy
+import rcply
 import math
 import numpy as np
+from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 
 class GoToGoal:
     def __init__(self):
-        rospy.init_node('go_to_goal', anonymous=True)
+        super().__init__('go_to_goal')
         
         # Goal waypoints (x, y)
         self.waypoints = [(1.5, 0), (1.5, 1.4), (1.4, 0)]
@@ -36,7 +35,7 @@ class GoToGoal:
         self.velocity_estimate = np.array([0.0, 0.0])
         self.covariance = np.identity(2)
         self.kalman_filter = KalmanFilter()
-        self.previous_time = rospy.Time.now()
+        self.previous_time = self.get_clock().now()
         # Initialize Kalman filter variables
         # State vector [x_position, y_position, x_velocity, y_velocity]
         self.state_estimate = np.array([0.0, 0.0, 0.0, 0.0])
@@ -53,10 +52,9 @@ class GoToGoal:
         self.transition_matrix = np.eye(4)
 
         # ROS Publishers and Subscribers
-        self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
-        self.obstacle_detected_sub = rospy.Subscriber('/obstacle_detected', Bool, self.obstacle_callback)
-
+        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.obstacle_detected_sub = self.create_subscription(Bool, '/obstacle_detected', self.obstacle_callback, 10)
         self.reached_goal = False
         self.obstacle_detected = False
     def predict(self, dt):
@@ -115,9 +113,9 @@ class GoToGoal:
         yaw = self.get_yaw_from_quaternion(msg.pose.pose.orientation)
 
          # Predict phase with time delta (dt)
-        current_time = rospy.Time.now()
-        dt = (current_time - self.previous_time).to_sec()
-        self.kalman_filter.predict(dt)
+        current_time = self.get_clock().now()
+        dt = (current_time.nanoseconds - self.previous_time.nanoseconds) / 1e9
+        self.previous_time = current_time
 
         # Update phase with current measurement
         self.kalman_filter.update(current_measurement)
@@ -164,10 +162,10 @@ class GoToGoal:
         return linear_vel, angular_vel
 
     def go_to_goal(self):
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown() and self.current_waypoint_index < len(self.waypoints):
+        self.timer = self.create_timer(0.1, self.go_to_goal)
+        while rclpy.ok() and self.current_waypoint_index < len(self.waypoints):
             if self.reached_goal:
-                rospy.loginfo("Reached final goal!")
+                self.get_logger().info("Reached final goal!")
                 break
 
             goal_x, goal_y = self.waypoints[self.current_waypoint_index]
@@ -177,7 +175,7 @@ class GoToGoal:
 
             if distance_to_goal < 0.1:
                 self.current_waypoint_index += 1
-                rospy.loginfo("Waypoint reached, moving to next waypoint.")
+                self.get_logger().info("Waypoint reached, moving to next waypoint.")
 
             else:
                 # Apply PID control to compute velocities
@@ -190,8 +188,12 @@ class GoToGoal:
             rate.sleep()
 
 if __name__ == "__main__":
+    rclpy.init()
+    node = GoToGoal()
     try:
-        node = GoToGoal()
-        node.go_to_goal()
-    except rospy.ROSInterruptException:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
         pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
