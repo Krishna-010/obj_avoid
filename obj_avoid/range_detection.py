@@ -6,7 +6,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
-class RangeDetection:
+class RangeDetection(Node):
     def __init__(self):
         super().__init__('range_detection')
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
