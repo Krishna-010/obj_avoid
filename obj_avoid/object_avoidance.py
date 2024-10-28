@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 
-import rospy
-from geometry_msgs.msg import PoseStamped, PoseArray
+import rcply
+from geometry_msgs.msg import PoseStamped, PoseArray, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 import numpy as np
 import random
-from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import LaserScan
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 class ObstacleAvoidance:
     def __init__(self):
-        rospy.init_node('obstacle_avoidance', anonymous=True)
+        super().__init__('obstacle_avoidance')
         qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,depth=10)
         # Publishers and Subscribers
-        self.path_pub = rospy.Publisher('/planned_path', PoseArray, queue_size=10)
-        self.obstacle_pub = rospy.Publisher('/obstacle_detected', Bool, queue_size=10)
-        self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+        self.path_pub = self.create_publisher(PoseArray, '/planned_path', 10)
+        self.obstacle_pub = self.create_publisher(Bool, '/obstacle_detected', 10)
+        self.velocity_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
         # Subscribe to sensor data here for obstacles
-        self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
-        self.laser_subscriber = rospy.Subscriber("/scan", LaserScan, self.laser_callback,qos_profile)
-
+        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.laser_subscriber = self.create_subscription(LaserScan, '/scan', self.laser_callback, qos_profile)
     def laser_callback(self, msg):
         # Process laser data to update obstacle list
         self.obstacle_list = []
@@ -49,15 +47,15 @@ class ObstacleAvoidance:
             velocity_msg.angular.z = 2.4 * np.arctan2(direction[1], direction[0])  # Adjust angle
             
             self.velocity_publisher.publish(velocity_msg)
-            rospy.sleep(0.1)
+            self.get_clock().sleep_for(rcply.duration.Duration(seconds=0.1))
 
     def get_current_position(self):
         # Placeholder: Replace with current position data from odometry or localization
         return [0.0, 0.0]
 
     def run(self):
-        rate = rospy.Rate(1)  # Hz
-        while not rospy.is_shutdown():
+        rate = self.create_rate(1)  # Hz
+        while rcply.ok():
             planner = RRTPlanner(start=self.get_current_position(), 
                                  goal=self.goal_position, 
                                  obstacle_list=self.obstacle_list, 
@@ -67,16 +65,24 @@ class ObstacleAvoidance:
             path = planner.plan()
             
             if path:
-                rospy.loginfo("Path found, moving along path.")
+                self.get_logger().info("Path found, moving along path.")
                 self.move_along_path(path)
             else:
-                rospy.logwarn("Path not found. Re-planning...")
+                self.get_logger().warn("Path not found. Re-planning...")
             
             rate.sleep()
-
-if __name__ == "__main__":
+            
+def main(args=None):
+    rclpy.init(args=args)
+    obstacle_avoidance = ObstacleAvoidance()
     try:
-        obstacle_avoidance = ObstacleAvoidance()
         obstacle_avoidance.run()
-    except rospy.ROSInterruptException:
+    except rclpy.exceptions.ROSInterruptException:
         pass
+    finally:
+        obstacle_avoidance.destroy_node()
+        rclpy.shutdown()
+        
+if __name__ == "__main__":
+    main()
+    
