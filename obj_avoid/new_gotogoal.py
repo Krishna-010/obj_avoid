@@ -45,9 +45,9 @@ class Bug2Controller(Node):
         self.robot_mode = "go to goal mode"
         
         # Parameters
-        self.dist_thresh_obs = 0.3  # Obstacle detection threshold
-        self.wall_following_dist = 0.5  # Wall-following distance
-        self.goal_threshold = 0.2  # Waypoint goal threshold
+        self.dist_thresh_obs = 0.35  # Obstacle detection threshold
+        self.wall_following_dist = 0.4  # Wall-following distance
+        self.goal_threshold = 0.15  # Waypoint goal threshold
         self.hysteresis_margin = 0.2  # Buffer margin for switching back to "go to goal"
 
     def odom_callback(self, msg):
