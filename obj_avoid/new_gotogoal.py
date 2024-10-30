@@ -45,8 +45,8 @@ class Bug2Controller(Node):
         self.robot_mode = "go to goal mode"
         
         # Parameters
-        self.dist_thresh_obs = 0.35  # Obstacle detection threshold
-        self.wall_following_dist = 0.3  # Wall-following distance
+        self.dist_thresh_obs = 0.21  # Obstacle detection threshold
+        self.wall_following_dist = 0.18  # Wall-following distance
         self.goal_threshold = 0.1  # Waypoint goal threshold
         self.hysteresis_margin = 0.7  # Buffer margin for switching back to "go to goal"
 
