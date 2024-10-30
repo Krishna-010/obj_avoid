@@ -1,112 +1,82 @@
+from rclpy.qos import qos_profile_sensor_data
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
-from rclpy.qos import qos_profile_sensor_data
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 import math
 
 class Bug2Controller(Node):
     def __init__(self):
         super().__init__('bug2_controller')
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.scan_sub = self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile=qos_profile_sensor_data)
+        self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.laser_sub = self.create_subscription(LaserScan, 'scan', self.scan_callback, qos_profile=qos_profile_sensor_data)
+        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
 
         # Parameters
-        self.dist_thresh_obs = 0.35
-        self.wall_following_dist = 0.4
-        self.goal_threshold = 0.15
-        self.hysteresis_margin = 0.2
-        self.dynamic_dist_thresh = self.dist_thresh_obs  # Used for dynamic adjustments
-
-        # Waypoints and control
-        self.current_waypoint = 0
+        self.dist_thresh_obs = 0.21  # Obstacle detection threshold
+        self.wall_following_dist = 0.18  # Wall-following distance
+        self.goal_threshold = 0.1  # Waypoint goal threshold
+        self.hysteresis_margin = 0.5  # Buffer margin for switching back to "go to goal"
+        
+        # State variables
+        self.mode = "go to goal"  # Modes: "go to goal", "wall following"
+        self.current_goal_index = 0
         self.waypoints = [(1.5, 0), (1.5, 1.4), (1.4, 0)]
-        self.mode = "go to goal"
-        self.twist = Twist()
-
-        # Initialize laser_ranges
         self.laser_ranges = []
-
-        # PID controller for smoother wall following
-        self.kp = 0.5
-        self.kd = 0.1
-        self.last_error = 0.0
-
-    def odom_callback(self, msg):
-        self.current_pos = (msg.pose.pose.position.x, msg.pose.pose.position.y)
-        if self.at_goal():
-            self.switch_to_next_waypoint()
-        elif self.mode == "go to goal" and self.obstacle_detected():
-            self.mode = "wall following mode"
-            self.dynamic_dist_thresh = self.dist_thresh_obs * 1.2  # Increase threshold for curves
-        elif self.mode == "wall following mode":
-            self.wall_following_control()
+        self.position = (0.0, 0.0)
 
     def scan_callback(self, msg):
         self.laser_ranges = msg.ranges
-        if self.mode == "wall following mode" and self.on_start_goal_line() and not self.obstacle_detected():
-            self.mode = "go to goal"
-            self.dynamic_dist_thresh = self.dist_thresh_obs  # Reset after wall-following
+        self.process_scan()
+
+    def process_scan(self):
+        if self.mode == "wall following" and self.obstacle_detected():
+            self.follow_wall()
+        elif self.mode == "go to goal" and not self.obstacle_detected():
+            self.move_to_goal()
+
+    def odom_callback(self, msg):
+        self.position = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+        if self.mode == "go to goal":
+            if self.reached_goal():
+                self.current_goal_index += 1
+                if self.current_goal_index >= len(self.waypoints):
+                    self.get_logger().info("All goals reached!")
+                    self.stop_bot()
+                else:
+                    self.set_mode("go to goal")  # Move to the next goal
+        elif self.mode == "wall following":
+            if not self.obstacle_detected():
+                self.set_mode("go to goal")  # Switch back to goal mode if no obstacle
+
+    def set_mode(self, mode):
+        self.mode = mode
+        self.get_logger().info(f"Switched to mode: {self.mode}")
 
     def obstacle_detected(self):
-        # Return false if no laser ranges are available
-        if not self.laser_ranges:
-            return False
-        # Detect if obstacles are present within the threshold
-        return any(distance < self.dynamic_dist_thresh for distance in self.laser_ranges if not math.isinf(distance))
+        return any(distance < self.dist_thresh_obs for distance in self.laser_ranges if not math.isinf(distance))
 
-    def on_start_goal_line(self):
-        # Check if bot is on start-goal line based on waypoint slope
-        start_x, start_y = self.waypoints[0]
-        goal_x, goal_y = self.waypoints[-1]
-        current_x, current_y = self.current_pos
-        # Basic line equation check for "start-goal line" alignment
-        return abs((goal_y - start_y) * (current_x - start_x) - (goal_x - start_x) * (current_y - start_y)) < 0.05
+    def reached_goal(self):
+        goal_x, goal_y = self.waypoints[self.current_goal_index]
+        return math.sqrt((self.position[0] - goal_x) ** 2 + (self.position[1] - goal_y) ** 2) < self.goal_threshold
 
-    def at_goal(self):
-        # Check if the bot is near the current waypoint
-        x, y = self.current_pos
-        goal_x, goal_y = self.waypoints[self.current_waypoint]
-        return math.sqrt((x - goal_x) ** 2 + (y - goal_y) ** 2) < self.goal_threshold
+    def move_to_goal(self):
+        goal_x, goal_y = self.waypoints[self.current_goal_index]
+        twist = Twist()
+        twist.linear.x = 0.15
+        twist.angular.z = 0.0  # Placeholder for actual angle calculation
+        self.cmd_pub.publish(twist)
 
-    def switch_to_next_waypoint(self):
-        # Move to the next waypoint in list
-        if self.current_waypoint < len(self.waypoints) - 1:
-            self.current_waypoint += 1
-            self.mode = "go to goal"
+    def follow_wall(self):
+        twist = Twist()
+        twist.linear.x = 0.08  # Slower speed while following wall
+        twist.angular.z = 0.5  # Turn to follow wall
+        self.cmd_pub.publish(twist)
 
-    def go_to_goal_control(self):
-        goal_x, goal_y = self.waypoints[self.current_waypoint]
-        x, y = self.current_pos
-        distance = math.sqrt((goal_x - x) ** 2 + (goal_y - y) ** 2)
-        angle_to_goal = math.atan2(goal_y - y, goal_x - x)
-        self.twist.linear.x = min(0.18, distance)
-        self.twist.angular.z = min(2.4, angle_to_goal)
-        self.cmd_vel_pub.publish(self.twist)
-
-    def wall_following_control(self):
-        # Basic curvature check: adjust dynamic threshold based on detected obstacle shape
-        curvature = self.estimate_curvature()
-        if curvature > 0.3:  # If curvature is high, adjust wall-following threshold dynamically
-            self.dynamic_dist_thresh = max(self.dist_thresh_obs, self.wall_following_dist * 1.1)
-
-        # PID control for smooth wall-following
-        error = self.wall_following_dist - min(self.laser_ranges)
-        derivative = error - self.last_error
-        self.twist.linear.x = 0.15
-        self.twist.angular.z = self.kp * error + self.kd * derivative
-        self.cmd_vel_pub.publish(self.twist)
-        self.last_error = error
-
-    def estimate_curvature(self):
-        # Assess the curvature of the wall based on the laser scan readings
-        scan_points = [r for r in self.laser_ranges if not math.isinf(r)]
-        if len(scan_points) < 2:
-            return 0
-        curvature_sum = sum(abs(scan_points[i] - scan_points[i + 1]) for i in range(len(scan_points) - 1))
-        return curvature_sum / len(scan_points)
+    def stop_bot(self):
+        twist = Twist()
+        self.cmd_pub.publish(twist)
 
 def main():
     rclpy.init()
