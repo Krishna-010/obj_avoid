@@ -37,6 +37,8 @@ class Bug2Controller(Node):
         self.current_x, self.current_y, self.current_yaw = 0.0, 0.0, 0.0
         self.goal_x, self.goal_y = None, None
         self.start_goal_line_calculated = False
+        self.start_goal_slope = None
+        self.start_goal_intercept = None
         self.waypoints = [(1.5, 0.0), (1.5, 1.4), (0.0, 1.4)]
         self.current_waypoint_index = 0
         self.has_obstacle = False
@@ -56,10 +58,17 @@ class Bug2Controller(Node):
     def calculate_start_goal_line(self):
         self.start_x, self.start_y = self.current_x, self.current_y
         self.goal_x, self.goal_y = self.waypoints[self.current_waypoint_index]
-        self.start_goal_slope = (self.goal_y - self.start_y) / (self.goal_x - self.start_x) if self.goal_x != self.start_x else float('inf')
+        if self.goal_x != self.start_x:
+            self.start_goal_slope = (self.goal_y - self.start_y) / (self.goal_x - self.start_x)
+            self.start_goal_intercept = self.start_y - self.start_goal_slope * self.start_x
+        else:
+            self.start_goal_slope = float('inf')
+            self.start_goal_intercept = None
         self.start_goal_line_calculated = True
 
     def on_start_goal_line(self):
+        if self.start_goal_slope is None:
+            return False
         if self.start_goal_slope == float('inf'):
             return abs(self.current_x - self.start_x) < 0.05
         else:
