@@ -46,9 +46,9 @@ class Bug2Controller(Node):
         
         # Parameters
         self.dist_thresh_obs = 0.35  # Obstacle detection threshold
-        self.wall_following_dist = 0.25  # Wall-following distance
-        self.goal_threshold = 0.05  # Waypoint goal threshold
-        self.hysteresis_margin = 0.49  # Buffer margin for switching back to "go to goal"
+        self.wall_following_dist = 0.3  # Wall-following distance
+        self.goal_threshold = 0.1  # Waypoint goal threshold
+        self.hysteresis_margin = 0.7  # Buffer margin for switching back to "go to goal"
 
     def odom_callback(self, msg):
         self.current_x, self.current_y, self.current_yaw = msg.x, msg.y, msg.z
