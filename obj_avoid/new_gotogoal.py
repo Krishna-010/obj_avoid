@@ -26,6 +26,9 @@ class Bug2Controller(Node):
         self.mode = "go to goal"
         self.twist = Twist()
 
+        # Initialize laser_ranges
+        self.laser_ranges = []
+
         # PID controller for smoother wall following
         self.kp = 0.5
         self.kd = 0.1
@@ -48,6 +51,9 @@ class Bug2Controller(Node):
             self.dynamic_dist_thresh = self.dist_thresh_obs  # Reset after wall-following
 
     def obstacle_detected(self):
+        # Return false if no laser ranges are available
+        if not self.laser_ranges:
+            return False
         # Detect if obstacles are present within the threshold
         return any(distance < self.dynamic_dist_thresh for distance in self.laser_ranges if not math.isinf(distance))
 
